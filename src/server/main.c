@@ -56,55 +56,6 @@ int bared_init()
     return BSP_RTN_SUCCESS;
 }
 
-/*
-// Get location of process
-static char * _get_dir()
-{
-    char self_name[_POSIX_PATH_MAX];
-    char *ret = NULL;
-    char *curr;
-    ssize_t nbytes = readlink("/proc/self/exe", self_name, _POSIX_PATH_MAX - 1);
-
-    if (-1 == nbytes)
-    {
-        ret = "./";
-    }
-    else
-    {
-        self_name[nbytes] = 0x0;
-        ret = realpath(self_name, NULL);
-        curr = strrchr(ret, '/');
-
-        if (curr)
-        {
-            curr[0] = 0x0;
-            curr = strrchr(ret, '/');
-            // Prev layer
-            if (curr)
-            {
-                curr[0] = 0x0;
-            }
-        }
-    }
-
-    return ret;
-}
-*/
-
-static void _set_dir(const char *dir)
-{
-    if (0 == chdir(dir))
-    {
-        bsp_trace_message(BSP_TRACE_NOTICE, "bspd", "Change current working directory to %s", dir);
-    }
-    else
-    {
-        bsp_trace_message(BSP_TRACE_ERROR, "bspd", "Change current working directory failed");
-    }
-
-    return;
-}
-
 static void _worker_on_poke(BSP_THREAD *t)
 {
     if (!t || !t->additional)
@@ -150,11 +101,12 @@ static ssize_t _proc_packet(struct bspd_bare_data_t *bared, BSP_SOCKET_CLIENT *c
     }
 
     BSPD_SESSION *session = (BSPD_SESSION *) clt->additional;
+/*
     if (!session)
     {
         return len;
     }
-
+*/
     const char *input = STR_STR(bared->data);
     uint8_t hdr = (uint8_t) input[0];
 
@@ -187,10 +139,18 @@ static ssize_t _proc_packet(struct bspd_bare_data_t *bared, BSP_SOCKET_CLIENT *c
             case BSPD_CTL_SPEC : 
                 break;
             case BSPD_CTL_SERIALIZE : 
-                session->serialize_type = (BSPD_SERIALIZE_TYPE) ctl_data;
+                if (session)
+                {
+                    session->serialize_type = (BSPD_SERIALIZE_TYPE) ctl_data;
+                }
+
                 break;
             case BSPD_CTL_COMPRESS : 
-                session->compress_type = (BSPD_COMPRESS_TYPE) ctl_data;
+                if (session)
+                {
+                    session->compress_type = (BSPD_COMPRESS_TYPE) ctl_data;
+                }
+
                 break;
         }
 
@@ -359,10 +319,10 @@ static int _bspd_on_connect(BSP_SOCKET_CLIENT *clt)
     BSP_SOCKET_SERVER *srv = clt->connected_server;
     if (srv)
     {
-        new_session(clt);
         BSPD_SERVER_PROP *prop = (BSPD_SERVER_PROP *) srv->additional;
         BSPD_SCRIPT_TASK *task = new_script_task(BSPD_TASK_CTL);
         task->clt = clt->sck.fd;
+        task->ptr = NULL;
         task->func = prop->lua_hook_connect;
         push_script_task(task);
     }
@@ -380,14 +340,13 @@ static int _bspd_on_disconnect(BSP_SOCKET_CLIENT *clt)
     }
 
     BSPD_SESSION *session = (BSPD_SESSION *) clt->additional;
-    del_session(session);
-
     BSP_SOCKET_SERVER *srv = clt->connected_server;
     if (srv)
     {
         BSPD_SERVER_PROP *prop = (BSPD_SERVER_PROP *) srv->additional;
         BSPD_SCRIPT_TASK *task = new_script_task(BSPD_TASK_CTL);
         task->clt = clt->sck.fd;
+        task->ptr = (session) ? session->session_id : NULL;
         task->func = prop->lua_hook_disconnect;
         push_script_task(task);
     }
@@ -803,7 +762,6 @@ size_t send_command(BSP_SOCKET_CLIENT *clt, int command, BSP_OBJECT *params)
     {
         case BSPD_SERIALIZE_JSON : 
             data = json_nd_encode(params, data);
-            debug_hex(STR_STR(data), STR_LEN(data));
             break;
         case BSPD_SERIALIZE_MSGPACK : 
             break;
@@ -836,6 +794,7 @@ size_t send_command(BSP_SOCKET_CLIENT *clt, int command, BSP_OBJECT *params)
             break;
     }
 */
+    //debug_hex(STR_STR(data), STR_LEN(data));
     unsigned char hdr = BSPD_PACKET_CMD << 6 | (session->compress_type) << 1;
     ret = _real_send(clt, hdr, data);
     bsp_del_string(data);
@@ -908,6 +867,40 @@ static void _callback_reload_conf()
     return;
 }
 
+// WINCH : Reopen log file
+static void _callback_reopen_log()
+{
+    close_log();
+
+    return;
+}
+
+// Base clock (1 Hz) trigger event
+static void _on_base_clock(BSP_TIMER *tmr)
+{
+    if (!tmr)
+    {
+        return;
+    }
+
+    BSP_THREAD *t;
+    BSPD_SCRIPT *scrt;
+    BSPD_CONFIG *c = get_global_config();
+    if (0 == (tmr->count & 0xFF))
+    {
+        // Gc one script per 256 seconds
+        int i = (tmr->count >> 8) % c->opt.worker_threads;
+        t = bsp_get_thread(BSP_THREAD_WORKER, i);
+        if (t)
+        {
+            scrt = (BSPD_SCRIPT *) t->additional;
+            lua_gc(scrt->state, LUA_GCCOLLECT, 0);
+        }
+    }
+
+    return;
+}
+
 // Portal
 int bspd_startup()
 {
@@ -922,7 +915,7 @@ int bspd_startup()
     }
 
     // Set current working directory to $prefix
-    _set_dir(BSPD_PREFIX_DIR);
+    set_dir(BSPD_PREFIX_DIR);
     BSPD_CONFIG *c = get_global_config();
     if (!c)
     {
@@ -932,13 +925,16 @@ int bspd_startup()
     }
 
     c->opt.mode = BSP_BOOTSTRAP_SERVER;
-    c->opt.trace_level = I_ERR;
+    c->opt.trace_level = I_NONE;
     c->opt.trace_recipient = show_trace;
+    c->opt.log_level = I_ALL;
+    c->opt.log_recipient = append_log;
     c->opt.worker_hook_notify = _worker_on_poke;
 
     c->opt.signal_on_usr1 = _callback_reload_script;
     c->opt.signal_on_usr2 = _callback_reload_state;
     c->opt.signal_on_tstp = _callback_reload_conf;
+    c->opt.signal_on_hup = _callback_reopen_log;
 
     // Load config
     BSP_OBJECT *conf = get_conf_from_file(c->config_file);
@@ -948,7 +944,14 @@ int bspd_startup()
     }
 
     parse_conf(conf);
+    if (BSP_TRUE == c->daemonize)
+    {
+        c->opt.daemonize = BSP_TRUE;
+        proc_daemonize();
+    }
+
     bsp_prepare(&c->opt);
+    save_pid();
 
     int i = 0;
     BSP_THREAD *t = NULL;
@@ -1037,16 +1040,36 @@ int bspd_startup()
     for (i = 0; i < c->opt.worker_threads; i ++)
     {
         t = bsp_get_thread(BSP_THREAD_WORKER, i);
-        scrt = new_script_container();
-        if (scrt)
+        if (t)
         {
-            t->additional = (void *) scrt;
-            LOAD_WRAPPERS(scrt->state)
-            load_script_file(scrt, c->script);
+            scrt = new_script_container();
+            if (scrt)
+            {
+                t->additional = (void *) scrt;
+                LOAD_WRAPPERS(scrt->state)
+                load_script_file(scrt, c->script);
+            }
         }
     }
 
-    fprintf(stderr, "\n\033[1;37mBSPD (\033[0m\033[1;32mgPVP\033[0m\033[1;37m) server started\033[0m\n\n");
+    t = bsp_get_thread(BSP_THREAD_BOSS, 0);
+    if (t)
+    {
+        struct timespec one_hz = {.tv_sec = 1, .tv_nsec = 0};
+        BSP_TIMER *base_clock = bsp_new_timer(t->event_container, &one_hz, &one_hz, -1);
+        if (base_clock)
+        {
+            base_clock->on_timer = _on_base_clock;
+        }
+        else
+        {
+            fprintf(stderr, "No base timer\n");
+
+            return bsp_shutdown();
+        }
+    }
+
+    fprintf(stderr, "\n\033[1;37mBSPD server started\033[0m\nLibbsp version : %s\n\n", BSP_LIB_VERSION);
 
     return bsp_startup();
 }

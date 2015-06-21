@@ -3,6 +3,12 @@
 /* Configuration of BSP application */
 #undef BSPD_CONF_FILE
 
+/* Log directory */
+#undef BSPD_LOG_DIR
+
+/* PID file path */
+#undef BSPD_PID_FILE
+
 /* Prefix directory of BSP application */
 #undef BSPD_PREFIX_DIR
 

@@ -41,11 +41,29 @@
 #ifndef _UTILS_H
 
 #define _UTILS_H
+// Compressor
+BSP_STRING * zlib_compress(BSP_STRING *input);
+BSP_STRING * zlib_decompress(BSP_STRING *input);
+BSP_STRING * snappy_compress(BSP_STRING *input);
+BSP_STRING * snappy_decompress(BSP_STRING *input);
+BSP_STRING * lz4_compress(BSP_STRING *input);
+BSP_STRING * lz4_decompress(BSP_STRING *input);
+
 // Debugger
 void debug_object(BSP_OBJECT *obj);
 void debug_value(BSP_VALUE *val);
 void debug_hex(const char *data, size_t len);
 void debug_lua_stack(lua_State *s);
 void show_trace(BSP_TRACE *bt);
+void append_log(BSP_TRACE *bt);
+void close_log();
+void append_binary_log(BSP_TRACE *bt);
+void close_binary_log();
+
+// Misc
+char * get_dir();
+int set_dir(const char *dir);
+int save_pid();
+pid_t proc_daemonize();
 
 #endif  /* _UTILS_H */

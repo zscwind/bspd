@@ -21,7 +21,9 @@ bspd_SOURCES = \
 	protocol/http.c \
 	protocol/websocket.c \
 	protocol/protocol.h \
+	utils/compress.c \
 	utils/debug.c \
+	utils/misc.c \
 	utils/utils.h \
 	server/main.c \
 	server/conf.c \
@@ -29,6 +31,8 @@ bspd_SOURCES = \
 	server/clients.c \
 	server/server.h \
 	wrapper/standard.c \
+	wrapper/global.c \
+	wrapper/misc.c \
 	wrapper/wrapper.h \
 	bspd.c \
 	bspd.h

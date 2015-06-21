@@ -180,14 +180,29 @@ typedef struct bspd_session_t
     BSPD_COMPRESS_TYPE  compress_type;
     BSP_SOCKET_CLIENT   *bind;
     BSP_BOOLEAN         logged;
+    BSP_BOOLEAN         reported;
+    int                 static_channel;
+    int                 dynamic_channel;
 } BSPD_SESSION;
+
+// Channel type
+typedef enum bspd_channel_type_e
+{
+    BSPD_CHANNEL_ALL    = 0, 
+#define BSPD_CHANNEL_ALL                BSPD_CHANNEL_ALL
+    BSPD_CHANNEL_STATIC = 1, 
+#define BSPD_CHANNEL_STATIC             BSPD_CHANNEL_STATIC
+    BSPD_CHANNEL_DYNAMIC
+                        = 2, 
+#define BSPD_CHANNEL_DYNAMIC            BSPD_CHANNEL_DYNAMIC
+} BSPD_CHANNEL_TYPE;
 
 // Channel
 typedef struct bspd_channel_t
 {
     int                 id;
-    BSPD_SESSION        **sessions;
-    size_t              nsessions;
+    BSPD_CHANNEL_TYPE   type;
+    BSP_OBJECT          *list;
 } BSPD_CHANNEL;
 
 typedef struct bspd_server_prop_t
@@ -295,7 +310,6 @@ int del_script_container(BSPD_SCRIPT *scrt);
 int restart_script_container(BSPD_SCRIPT *scrt);
 int load_script_file(BSPD_SCRIPT *scrt, const char *script_filename);
 int load_script_content(BSPD_SCRIPT *scrt, BSP_STRING *script);
-inline size_t lua_table_size(lua_State *s, int idx);
 void object_to_lua(lua_State *s, BSP_OBJECT *obj);
 BSP_OBJECT * lua_to_object(lua_State *s, int idx);
 int call_script(BSPD_SCRIPT *scrt, BSPD_SCRIPT_TASK *task);
@@ -303,16 +317,28 @@ BSPD_SCRIPT_TASK * new_script_task(BSPD_SCRIPT_TASK_TYPE type);
 void del_script_task(BSPD_SCRIPT_TASK *task);
 int push_script_task(BSPD_SCRIPT_TASK *task);
 BSPD_SCRIPT_TASK * pop_script_task();
+
+/* Client */
 int clients_init();
 int reg_client(BSP_SOCKET_CLIENT *clt);
 int unreg_client(BSP_SOCKET_CLIENT *clt);
 BSP_SOCKET_CLIENT * check_client(int fd);
-BSPD_SESSION * new_session(BSP_SOCKET_CLIENT *clt);
-int del_session(BSPD_SESSION *session);
-int session_login(BSPD_SESSION *session);
-int session_logoff(BSPD_SESSION *session);
-BSPD_SESSION * check_session(const char *session_id);
 
+BSPD_SESSION * new_session();
+int set_session(BSPD_SESSION *session, const char *session_id);
+int del_session(BSPD_SESSION *session);
+BSPD_SESSION * check_session(const char *session_id);
+int bind_session(BSP_SOCKET_CLIENT *clt, BSPD_SESSION *session);
+int logon_session(BSPD_SESSION *session);
+int logoff_session(BSPD_SESSION *session);
+
+int new_channel(BSPD_CHANNEL_TYPE type);
+int del_channel(int channel_id);
+BSPD_CHANNEL * check_channel(int channel_id);
+int add_session_to_channel(BSPD_CHANNEL *channel, BSPD_SESSION *session);
+int remove_session_from_channel(BSPD_CHANNEL *channel, BSPD_SESSION *session);
+
+/* Send actions */
 size_t send_string(BSP_SOCKET_CLIENT *clt, BSP_STRING *str);
 size_t send_object(BSP_SOCKET_CLIENT *clt, BSP_OBJECT *object);
 size_t send_command(BSP_SOCKET_CLIENT *clt, int command, BSP_OBJECT *params);

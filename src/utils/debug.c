@@ -40,6 +40,11 @@
 
 #include "../bspd.h"
 
+static BSP_SPINLOCK log_lock = BSP_SPINLOCK_INITIALIZER;
+static BSP_SPINLOCK binary_log_lock = BSP_SPINLOCK_INITIALIZER;
+static FILE *log_fp = NULL;
+static FILE *binary_log_fp = NULL;
+
 static void _dump_value(BSP_VALUE *val, int layer);
 static void _dump_object(BSP_OBJECT *obj, int layer);
 
@@ -153,7 +158,7 @@ static void _dump_object(BSP_OBJECT *obj, int layer)
                 _dump_value(val, layer);
             }
 
-            fprintf(stderr, "\n");
+            //fprintf(stderr, "\n");
             break;
         case BSP_OBJECT_HASH : 
             // Hash
@@ -179,7 +184,7 @@ static void _dump_object(BSP_OBJECT *obj, int layer)
                 val = bsp_object_curr(obj, (void **) &key);
             }
 
-            fprintf(stderr, "\n");
+            //fprintf(stderr, "\n");
             break;
         case BSP_OBJECT_UNDETERMINED : 
         default : 
@@ -318,6 +323,7 @@ void show_trace(BSP_TRACE *bt)
         {
             break;
         }
+
         level = level >> 1;
         idx ++;
     }
@@ -335,6 +341,82 @@ void show_trace(BSP_TRACE *bt)
                     "\033[1;35m%s\033[0m"
                     "\033[1;37m]\033[0m"
                     " : %s\n", tgdata, lstr[idx], bt->tag, bt->msg);
+
+    return;
+}
+
+void append_log(BSP_TRACE *bt)
+{
+    struct tm loctime;
+    char tgdata[64];
+    char *lstr[] = {" ERERG", 
+                    " ALERT", 
+                    "  CRIT", 
+                    "   ERR", 
+                    "  WARN", 
+                    "NOTICE", 
+                    "  INFO", 
+                    " DEBUG"};
+    int idx = 0;
+    int level = bt->level;
+    while (level > 0)
+    {
+        if (level & 1)
+        {
+            break;
+        }
+
+        level = level >> 1;
+        idx ++;
+    }
+
+    localtime_r(&bt->localtime, &loctime);
+    strftime(tgdata, 64, "%m/%d%Y %H:%M:%S", &loctime);
+
+    bsp_spin_lock(&log_lock);
+    if (!log_fp)
+    {
+        BSPD_CONFIG *c = get_global_config();
+        log_fp = fopen(c->log_file, "w+");
+    }
+
+    if (log_fp)
+    {
+        fprintf(log_fp, "[%s][%s]-[%s] : %s\n", tgdata, lstr[idx], bt->tag, bt->msg);
+    }
+
+    bsp_spin_unlock(&log_lock);
+
+    return;
+}
+
+void close_log()
+{
+    if (log_fp)
+    {
+        bsp_spin_lock(&log_lock);
+        fclose(log_fp);
+        log_fp = NULL;
+        bsp_spin_unlock(&log_lock);
+    }
+
+    return;
+}
+
+void append_binary_log(BSP_TRACE *bt)
+{
+    return;
+}
+
+void close_binary_log()
+{
+    if (binary_log_fp)
+    {
+        bsp_spin_lock(&binary_log_lock);
+        fclose(binary_log_fp);
+        binary_log_fp = NULL;
+        bsp_spin_unlock(&binary_log_lock);
+    }
 
     return;
 }

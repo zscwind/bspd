@@ -47,6 +47,9 @@
 
 #define MAX_SESSION_ID_LENGTH           64
 #define CLIENT_LIST_INITIAL             65536
+#define CHANNEL_LIST_INITIAL            4096
+
+#define LOG_FILENAME                    "bspd.log"
 
 #include "serialization/serialization.h"
 #include "server/server.h"
@@ -57,9 +60,12 @@
 typedef struct bspd_config_t
 {
     char                *config_file;
+    char                *pid_file;
+    char                *log_file;
     BSP_BOOTSTRAP_OPTIONS
                         opt;
     BSP_BOOLEAN         verbose;
+    BSP_BOOLEAN         daemonize;
     const char          *script;
     const char          *lua_hook_load;
 

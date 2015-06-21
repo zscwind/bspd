@@ -49,6 +49,8 @@ static BSPD_SCRIPT_TASK *task_queue_head = NULL;
 static BSPD_SCRIPT_TASK *task_queue_tail = NULL;
 static BSP_SPINLOCK task_queue_lock;
 
+inline size_t lua_table_size(lua_State *s, int idx);
+
 int script_init()
 {
     if (!mp_task)
@@ -475,6 +477,7 @@ static BSP_VALUE * _lua_value_to_value(lua_State *s, int idx)
             V_SET_STRING(ret, v_str);
             break;
         case LUA_TUSERDATA : 
+        case LUA_TLIGHTUSERDATA : 
             v_ptr = lua_touserdata(s, idx);
             V_SET_POINTER(ret, v_ptr);
             break;
@@ -534,8 +537,10 @@ static BSP_OBJECT * _lua_table_to_object(lua_State *s, int idx)
             // Key
             key_str = lua_tolstring(s, -2, &key_len);
             key = bsp_new_string(key_str, key_len);
+
             // Value
             val = _lua_value_to_value(s, -1);
+
             bsp_object_set_hash(ret, key, val);
             lua_pop(s, 1);
         }
@@ -612,7 +617,8 @@ int call_script(BSPD_SCRIPT *scrt, BSPD_SCRIPT_TASK *task)
     {
         case BSPD_TASK_CTL : 
             lua_pushinteger(scrt->state, (lua_Integer) task->clt);
-            nargs = 1;
+            lua_pushstring(scrt->state, (const char *) task->ptr);
+            nargs = 2;
             break;
         case BSPD_TASK_RAW : 
         case BSPD_TASK_STREAM : 
@@ -684,6 +690,7 @@ int call_script(BSPD_SCRIPT *scrt, BSPD_SCRIPT_TASK *task)
     {
         case LUA_OK : 
             // Successed
+            bsp_trace_message(BSP_TRACE_DEBUG, "lua", "Call chunk successfully");
             break;
         case LUA_YIELD : 
             // Yield
@@ -792,6 +799,7 @@ int push_script_task(BSPD_SCRIPT_TASK *task)
     // Tell worker
     bsp_poke_event_container(t->event_container);
     bsp_spin_unlock(&task_queue_lock);
+    bsp_trace_message(BSP_TRACE_DEBUG, "lua", "Push task %p to queue", task);
 
     return BSP_RTN_SUCCESS;
 }
@@ -813,6 +821,7 @@ BSPD_SCRIPT_TASK * pop_script_task()
     }
 
     bsp_spin_unlock(&task_queue_lock);
+    bsp_trace_message(BSP_TRACE_DEBUG, "lua", "Pop task %p from queue", task);
 
     return task;
 }

@@ -1,6 +1,6 @@
 /* -*- Mode: C; indent-tabs-mode: nil; c-basic-offset: 4; tab-width: 4 -*-  */
 /*
- * wrapper.n
+ * compress.c
  * Copyright (C) 2015 Dr.NP <conan.np@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,26 +29,58 @@
  */
 
 /**
- * LUA apis wrapper header
+ * Compress and decompress wrapper
  *
- * @package bsp::duang
+ * @package bsp::dunag
  * @author Dr.NP <np@bsgroup.org>
- * @update 04/29/2015
+ * @update 06/11/2015
  * @changelog
- *      [04/29/2015] - Creation
+ *      [06/11/2015] - Creation
  */
 
-#ifndef _WRAPPER_H
+#include "../bspd.h"
 
-#define _WRAPPER_H
+/* Zlib */
+BSP_STRING * zlib_compress(BSP_STRING *input)
+{
+    BSP_STRING *ret = NULL;
 
-int module_standard(lua_State *s);
-int module_global(lua_State *s);
-int module_misc(lua_State *s);
+    return ret;
+}
 
-#define LOAD_WRAPPERS(s) \
-    module_standard(s); \
-    module_global(s); \
-    module_misc(s);
+BSP_STRING * zlib_decompress(BSP_STRING *input)
+{
+    BSP_STRING *ret = NULL;
 
-#endif  /* _WRAPPER_H */
+    return ret;
+}
+
+/* Snappy */
+BSP_STRING * snappy_compress(BSP_STRING *input)
+{
+    BSP_STRING *ret = NULL;
+
+    return ret;
+}
+
+BSP_STRING * snappy_decompress(BSP_STRING *input)
+{
+    BSP_STRING *ret = NULL;
+
+    return ret;
+}
+
+/* Lz4 */
+BSP_STRING * lz4_compress(BSP_STRING *input)
+{
+    BSP_STRING *ret = NULL;
+
+    return ret;
+}
+
+BSP_STRING * lz4_decompress(BSP_STRING *input)
+{
+    BSP_STRING *ret = NULL;
+
+    return ret;
+}
